@@ -27,11 +27,7 @@ Vacuum GSocket :: GSocket(GProcess* process, Int srcPort, U4 dstAddr, Int dstPor
 
 Vacuum GSocket :: ~GSocket()
 {
-  if (m_local)
-  {
-    m_local->setSocket(0);
-    delete m_local;
-  }
+  G_NZ(m_local)->setSocket(0);
 }
 
 /**********************************************************************************************/
@@ -66,7 +62,7 @@ GSocket* GSocket :: connect(U4 dstAddr, U2 dstPort)
 
     if (local->connect())
       return new GSocket(process, local);
-    delete local;
+    //delete local;
   }
   return 0;
 }

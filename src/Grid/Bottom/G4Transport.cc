@@ -5,6 +5,7 @@
 #include <Grid/Util/GRetainer.hh>
 #include <Grid/GFiber.hh>
 
+#define G_RETAIN(x) GRetainer<G4TransportL> __retainer__(this); Q_UNUSED(__retainer__)
 #define G_MSEC(x)   ((x) *    1000000ULL)
 #define G_SEC(x)    ((x) * 1000000000ULL)
 /**********************************************************************************************/
@@ -107,8 +108,8 @@ Bool G4Transport :: read(Address l3_src, GFrame& frame)
   header.localPort        = frame.readFront2();  //  2- 4
   header.sequence         = frame.readFront4();  //  4- 8
   header.ack              = frame.readFront4();  //  8-12
-  header.receiveWindow    = frame.readFront2();  // 12-14
-  header.flag             = frame.readFront1();  // 14-15
+  header.receiveWindow    = frame.readFront2();  // 12-16
+  header.flag             = frame.readFront1();  // 16-17
   GDescriptor   descriptor  = GDescriptor(header.localPort, l3_src, header.remotePort);
 
   gDebug(this, "R: remotePort = %i", header.remotePort);
@@ -198,7 +199,8 @@ Vacuum G4TransportL :: G4TransportL(G4Transport* global, GSocket* socket, Int sr
   m_srcSeq(0), m_receiveWindow(0), m_receiveWindow0(0),
   m_dstSeq(0), m_dstWindow(0),
   m_numRefs(1),
-  m_timeout(ULONG_LONG_MAX)
+  m_timeout0(ULONG_LONG_MAX),
+  m_timeout1(ULONG_LONG_MAX)
 {
   if (dstPort == -1)
     m_global->m_listeners.insert(srcPort, this);
@@ -208,9 +210,8 @@ Vacuum G4TransportL :: G4TransportL(G4Transport* global, GSocket* socket, Int sr
   printf("INTL %p\n", this);
   m_retryTimer << [=]()
   {
-    //GRetainer<G4TransportL> r(this);
     retransmit();
-    //timeoutCheck();
+    timeoutCheck();
   };
 }
 
@@ -275,7 +276,7 @@ Void G4TransportL :: ackOutput(U4 seq)
 
 Void G4TransportL :: close()
 {
-  GRetainer<G4TransportL> r(this);
+  G_RETAIN(this);
 
   if (m_state == Established)
   {
@@ -291,7 +292,7 @@ Void G4TransportL :: close()
 
 Bool G4TransportL :: connect()
 {
-  //GRetainer<G4TransportL> r(this);
+  G_RETAIN(this);
 
   if (!writeControl(SYN | RACK))
     return false;
@@ -299,11 +300,11 @@ Bool G4TransportL :: connect()
   //timeoutBegin(G_SEC(50));
   for (m_state = SynSent; m_state != Established; )
   {
-    /*if (m_state == Closed)
+    if (m_state == Closed)
     {
       gDebug(this, "unable to connect...");
       return false;
-    }*/
+    }
 
     m_monitor.wait();
   }
@@ -361,9 +362,9 @@ Void G4TransportL :: purgeSocket()
 Int G4TransportL :: read(U1* data, U4 length)
 {
   G_GUARD(m_state == Established, 0);
+  G_RETAIN(this);
 
-  auto  r           = GRetainer<G4TransportL>(this);
-  U4    total       = 0;
+  U4 total = 0;
 
   while ((length > 0) && (m_state == Established))
   {
@@ -428,12 +429,16 @@ Void G4TransportL :: readFin(U4 seq)
 
 Void G4TransportL :: readFrame(G4Header& header, GFrame& frame)
 {
-  GRetainer<G4TransportL> r(this);
+  G_GUARD(m_state != Closed, Vacuum);
+  G_RETAIN(this);
+
+  m_timeout0 = GFiber::time() + G_SEC(30);
+  m_timeout1 = m_timeout0     + G_SEC(3000);
 
   gDebug(this, "R: state      = %s", stateName(m_state).constData());
 
   if (header.sequence >= m_srcSeq)
-    setReceiveWindow(header.receiveWindow);
+    setReceiveWindow(header.ack, header.receiveWindow);
 
   if (header.flag & ACK)
     ackOutput(header.ack);
@@ -442,9 +447,9 @@ Void G4TransportL :: readFrame(G4Header& header, GFrame& frame)
   {
     case Established:   readFrameEstablished (header, frame);  break;
     case FinReceived:   readFrameFinReceived (header.sequence, frame);  break;
-    case FinSent:       readFrameFinSent     (header, frame);           break;
+    case FinSent:       readFrameFinSent     (header, frame);  break;
     case SynReceived:   readFrameSynReceived (header, frame);  break;
-    case SynSent:       readFrameSynSent     (header.sequence, frame);  break;
+    case SynSent:       readFrameSynSent     (header, frame);  break;
 
     default:
       gDebug(m_global, "R:ERROR: tried to read frame in invalid state %i\n", m_state);
@@ -537,14 +542,20 @@ Void G4TransportL :: readFrameSynReceived(G4Header& header, GFrame& frame)
 
 /**********************************************************************************************/
 
-Void G4TransportL :: readFrameSynSent(U4 seq, GFrame& frame)
+Void G4TransportL :: readFrameSynSent(G4Header& header, GFrame& frame)
 {
-  // connect
-  setState(Established);
-  m_dstSeq += 1;
-  m_srcSeq  = seq;
-  writeControl(ACK);
-  m_monitor.notify();
+  if (m_dstSeq == header.ack)
+  {
+    setState(Established);
+    m_dstSeq += 1;
+    m_srcSeq  = header.sequence;
+    writeControl(ACK);
+    m_monitor.notify();
+  }
+  else
+  {
+    gDebug(this, ">>LOST ACK RECEIVED<< (expected=%i, got=%i)", m_dstSeq, header.ack);
+  }
 }
 
 /**********************************************************************************************/
@@ -552,7 +563,7 @@ Void G4TransportL :: readFrameSynSent(U4 seq, GFrame& frame)
 Void G4TransportL :: release()
 {
   if (--m_numRefs == 0)
-    delete this;
+    gCollect(this);
 }
 
 /**********************************************************************************************/
@@ -572,15 +583,15 @@ Void G4TransportL :: retransmit()
 
     gSetContext(frame.frame.context());
 
-    if (frame.numRetries > g_4_retransmitRetries)
+    if (frame.numRetries <= 0)
     {
-      gDebug(this, "W: maximum retransmit count reached for frame = %i", it.key());
+      gDebug(this, "W: maximum retransmit count reached for frame");
       return setClosed();
     }
     else
     {
-      gDebug(this, "W: retransmitting frame: numRetries = %i/10", frame.numRetries);
-      frame.numRetries += 1;
+      gDebug(this, "W: retransmitting frame: numRetries = %i", frame.numRetries);
+      frame.numRetries -= 1;
       frame.time        = time;
       writeFrameEx(frame.frame, it.key());
     }
@@ -608,13 +619,15 @@ Void G4TransportL :: setSocket(GSocket* socket)
 
 /**********************************************************************************************/
 
-Void G4TransportL :: setReceiveWindow(U2 receiveWindow)
+Void G4TransportL :: setReceiveWindow(U4 ack, U2 receiveWindow)
 {
-  G_GUARD(m_receiveWindow != receiveWindow, Vacuum);
+  U2  window = qMax(0, int(ack + receiveWindow - m_dstSeq));
+  gDebug(this, "SRW %i %i %i -> %i", m_dstSeq, ack, receiveWindow, window);
+  G_GUARD(m_receiveWindow != window, Vacuum);
 
   if (m_receiveWindow == 0)
     m_monitor.notify();
-  m_receiveWindow = receiveWindow;
+  m_receiveWindow = window;
 }
 
 /**********************************************************************************************/
@@ -646,27 +659,22 @@ QByteArray G4TransportL :: stateName(int state)
 
 /**********************************************************************************************/
 
-Void G4TransportL :: timeoutBegin(Time time)
-{
-  m_timeout = GFiber::time() + time;
-}
-
-/**********************************************************************************************/
-
 Void G4TransportL :: timeoutCheck()
 {
-  if (m_timeout < GFiber::time())
+  Time time = GFiber::time();
+
+  if (m_timeout0 < time)
   {
-    gDebug(this, "TIMEOUT");
+    m_timeout0 = ULONG_LONG_MAX;
+    gDebug(this, "soft timeout");
+    writeControl(ACK | RACK);
+  }
+
+  if (m_timeout1 < time)
+  {
+    gDebug(this, "hard timeout");
     setClosed();
   }
-}
-
-/**********************************************************************************************/
-
-Void G4TransportL :: timeoutEnd()
-{
-  m_timeout = ULONG_LONG_MAX;
 }
 
 /**********************************************************************************************/
@@ -700,6 +708,7 @@ Bool G4TransportL :: waitForRead()
 
 Int G4TransportL :: write(const U1* data, U4 length)
 {
+  G_RETAIN(this);
   G_GUARD(waitForRead(), 0);
 
   while (length > 0)
@@ -726,16 +735,17 @@ Bool G4TransportL :: writeControl(U2 flags)
 
 /**********************************************************************************************/
 
-Bool G4TransportL :: writeFrame(U2 flags)
+Bool G4TransportL :: writeFrame(U2 flags, Int numRetries)
 {
   gSetContext(m_output0.context());
+  gDebug(this, "W: [window] = %i", m_receiveWindow);
   gDebug(this, "W: flag     = %x", flags);
 
   m_output0.writeFront1(flags);       // 14-15 flag
 
   if (flags & RACK)
   {
-    m_output.insert(++m_dstSeq, {GFiber::time(), 0, m_output0});
+    m_output.insert(++m_dstSeq, {GFiber::time(), numRetries, m_output0});
   }
 
   Bool result = writeFrameEx(m_output0, m_dstSeq);
@@ -748,13 +758,24 @@ Bool G4TransportL :: writeFrame(U2 flags)
 
 Bool G4TransportL :: writeFrameEx(GFrame frame, U4 seq)
 {
-  m_receiveWindow0 = (m_input.size() > 5) ? 0 : (5 - m_input.size());
-
   gDebug(this, "W: seq      = %i", seq);
   gDebug(this, "W: ack      = %i", m_srcSeq);
-  gDebug(this, "W: window   = %i", m_receiveWindow0);
 
-  frame.writeFront2(m_receiveWindow0);    // 12-14 rcv window
+  if (!m_input.empty())
+  {
+    int seq0    = m_input.begin().key();
+    int window  = seq0 + 5 - m_srcSeq;
+    m_receiveWindow0 = window > 0 ? window : 0;
+
+    gDebug(this, "W: window   = %i (seq=%i, srcSeq=%i)", m_receiveWindow0, seq0, m_srcSeq);
+  }
+  else
+  {
+    m_receiveWindow0 = 5;
+    gDebug(this, "W: window   = %i", m_receiveWindow0);
+  }
+
+  frame.writeFront2(m_receiveWindow0);    // 12-16 rcv window
   frame.writeFront4(m_srcSeq);            //  8-12 ack
   frame.writeFront4(seq);                 //  4- 8 seq
 

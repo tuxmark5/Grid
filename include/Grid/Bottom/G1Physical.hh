@@ -25,7 +25,8 @@ class G1Physical
     ___FLD Channel          m_chan;
     ___FLD I8               m_offset;
     ___FLD Int              m_state;
-    ___FLD Bool             m_collision: 1;
+    ___FLD Bool             m_collision:  1;
+    ___FLD Bool             m_enabled:    1;
 
   public:
     ___MET Vacuum           G1Physical(GLink* layer0, G2DataLink* layer2);
@@ -34,6 +35,7 @@ class G1Physical
     ___MET G2DataLink*      layer2() const { return m_layer2; }
     ___MET Bool             read(GFrame& frame);
     ___MET Bool             rescueCollision();
+    ___MET Void             setEnabled(Bool enabled);
     ___MET Bool             write(GFrame& frame);
     ___MET Void             writeNow(GFrame& frame);
     ___MET Bool             writeNow1(GFrame& frame);

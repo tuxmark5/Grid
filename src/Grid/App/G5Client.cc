@@ -18,7 +18,7 @@ Void G5Client :: run()
 {
   for (Int i = 0; i < m_numConnections; i++)
   {
-    //g_enableOutput = i > 853;
+    g_enableOutput = i >= 170;
     fprintf(stderr, "IT %i\n", i); fflush(stderr);
 
     gDebug(this, "CLIENT: connecting to %08x:%i, try=%i/%i",

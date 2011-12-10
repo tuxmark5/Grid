@@ -76,7 +76,7 @@ class G4Transport
 /*                                        G4TransportL                                        */
 /**********************************************************************************************/
 
-class G4TransportL
+class G4TransportL: public GObject
 {
   public:
     FRIEND class          G4Transport;
@@ -123,12 +123,13 @@ class G4TransportL
     ___FLD GFrame         m_output0;
 
     ___FLD U4             m_srcSeq;
-    ___FLD U4             m_receiveWindow0;
-    ___FLD U4             m_receiveWindow;
+    ___FLD U2             m_receiveWindow0;
+    ___FLD U2             m_receiveWindow;
     ___FLD U4             m_dstSeq;
     ___FLD U4             m_dstWindow;
     ___MET I1             m_numRefs;
-    ___MET Time           m_timeout;
+    ___MET Time           m_timeout0;
+    ___MET Time           m_timeout1;
 
   public:
     ___MET Vacuum         G4TransportL(G4Transport* global, GSocket* socket, Int srcPort, U4 dstAddr, Int dstPort);
@@ -161,10 +162,10 @@ class G4TransportL
     ___MET Void           readFrameFinReceived(U4 seq, GFrame& frame);
     ___MET Void           readFrameFinSent(G4Header& header, GFrame& frame);
     ___MET Void           readFrameSynReceived(G4Header& header, GFrame& frame);
-    ___MET Void           readFrameSynSent(U4 seq, GFrame& frame);
+    ___MET Void           readFrameSynSent(G4Header& header, GFrame& frame);
     ___MET Void           retransmit();
     ___MET Void           setClosed();
-    ___MET Void           setReceiveWindow(U2 receiveWindow);
+    ___MET Void           setReceiveWindow(U4 ack, U2 receiveWindow);
     ___MET Void           setState(int newState);
     ___MET Void           timeoutBegin(Time time);
     ___MET Void           timeoutCheck();
@@ -172,7 +173,7 @@ class G4TransportL
     ___MET Bool           waitForData();
     ___MET Bool           waitForRead();
     ___MET Bool           writeControl(U2 flags = ACK);
-    ___MET Bool           writeFrame(U2 flags = ACK);
+    ___MET Bool           writeFrame(U2 flags = ACK, Int numRetries = 10);
     ___MET Bool           writeFrameEx(GFrame frame, U4 seq);
 };
 

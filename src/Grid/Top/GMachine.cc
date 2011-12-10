@@ -24,6 +24,7 @@ Vacuum GMachine :: GMachine(const QByteArray& name):
 
 Vacuum GMachine :: GMachine(const GMachine& other)
 {
+  Q_UNUSED(other);
 }
 
 /**********************************************************************************************/
@@ -37,9 +38,15 @@ Vacuum GMachine :: ~GMachine()
 
 /**********************************************************************************************/
 
-Void GMachine :: printRoutingTables()
+QList<G2DataLink*> GMachine :: layer2() const
 {
-  //for (auto )
+  G3Network*          layer3 = m_layer4->layer3();
+  auto&               links  = layer3->links();
+  QList<G2DataLink*>  layer2;
+
+  for (auto it = links.begin(); it != links.end(); ++it)
+    layer2.append((*it)->layer2());
+  return layer2;
 }
 
 /**********************************************************************************************/

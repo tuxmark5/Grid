@@ -28,6 +28,7 @@ class GMachine
     ___MET Vacuum                   GMachine(const GMachine& other);
     ___MET Vacuum                   ~GMachine();
     ___MET GFiber*                  core() const { return m_core; }
+    ___MET QList<G2DataLink*>       layer2() const;
     ___MET G4Transport*             layer4() const { return m_layer4; }
     ___MET QByteArray               name() const { return m_name; }
     __sMET Void                     printRoutingTables();

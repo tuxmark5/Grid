@@ -114,7 +114,8 @@ Vacuum G1Physical :: G1Physical(GLink* layer0, G2DataLink* layer2):
   m_output(0),
   m_chan(&G1Physical::chan_f0_0xxx_xxxx),
   m_offset(-1),
-  m_collision(false)
+  m_collision(false),
+  m_enabled(true)
 {
 }
 
@@ -194,12 +195,26 @@ Bool G1Physical :: rescueCollision()
 
 /**********************************************************************************************/
 
+Void G1Physical :: setEnabled(Bool enabled)
+{
+  if ((m_enabled = enabled))
+  {
+    m_chan = &G1Physical::chan_f0_0xxx_xxxx;
+  }
+  else
+  {
+    m_chan = &G1Physical::chan_ignore;
+  }
+}
+
+/**********************************************************************************************/
+
 Bool G1Physical :: write(GFrame& frame)
 {
   gDebug(this, "W: frame queued;");
   gDebug(this, "W: size = %i;", frame.size());
 
-  if ((rand() % 500) == 1)
+  if ((rand() % 3) == 1)
   {
     gDebug(this, "W: CORRUPTING this frame to make things more interesting;");
     frame[rand() % frame.size()] = 0xFF;
@@ -254,6 +269,8 @@ Void G1Physical :: writeBitB(int bit)
 
 Void G1Physical :: writeNow(GFrame& frame)
 {
+  G_GUARD(m_enabled, Vacuum);
+
   for (int i = 0; i < 5; i++)
   {
     if (writeNow1(frame))

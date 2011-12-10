@@ -64,6 +64,7 @@ class G3Network
     ___MET G3Link*          addLink(GLink* link, U8 mac, Address address, U1 length);
     ___MET Bool             broadcast(U2 type, const GFrame& frame);
     ___MET G4Transport*     layer4() const { return m_layer4; }
+    ___MET const LinkList&  links() const { return m_links; }
     ___MET Bool             read(G2DataLink* layer2, U8 src, U2 type, GFrame& frame);
     ___MET Bool             readRoutingTable(G3Link* link, U8 src, GFrame& frame);
     ___MET Bool             readTransport(G3Link* link, GFrame& frame);
