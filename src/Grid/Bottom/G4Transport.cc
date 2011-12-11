@@ -6,8 +6,6 @@
 #include <Grid/GFiber.hh>
 
 #define G_RETAIN(x) GRetainer<G4TransportL> __retainer__(this); Q_UNUSED(__retainer__)
-#define G_MSEC(x)   ((x) *    1000000ULL)
-#define G_SEC(x)    ((x) * 1000000000ULL)
 /**********************************************************************************************/
 int   g_4_congestionWindow  = 3;    // 3
 int   g_4_receiveWindow     = 10;   //
@@ -429,7 +427,8 @@ Void G4TransportL :: readFin(U4 seq)
 
 Void G4TransportL :: readFrame(G4Header& header, GFrame& frame)
 {
-  G_GUARD(m_state != Closed, Vacuum);
+  G_GUARD(m_state != Closed,    Vacuum);
+  G_GUARD(m_state != Invalid,   Vacuum);
   G_RETAIN(this);
 
   m_timeout0 = GFiber::time() + G_SEC(30);

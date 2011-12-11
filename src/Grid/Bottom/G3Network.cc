@@ -266,26 +266,27 @@ Void G3Network :: updateRoute(G3Link* link, U8 hwSrc, Address dst, Int distance,
 
   G3Route& route = m_routeTable[dst];
 
-  bool r0 =   !route.m_link;
-  bool r1 = distance < route.m_distance;
+  bool r0 =   !route.m_link;                        // initialization
+  bool r1 = distance < route.m_distance;            // route with better distance)
+  bool r2 = I8(age - route.m_age) > I8(G_SEC(20));  // early re-route
 
-  if ( !route.m_link                  // initialization
-    || distance < route.m_distance    // route with better distance
-    /*|| route.m_hwAddress == hwSrc*/)    // updated entry
+  if (r0 || r1 || r2)
   {
-    /*printf("ADDED ENTRY FROM %x TO %x = dist=%i, met=%i [%i%i]\n",
-           link->m_address, dst, distance, link->metric(),
-           r0, r1);*/
     route.m_link        = link;
     route.m_hwAddress   = hwSrc;
     route.m_distance    = distance;
-    route.m_age         = GFiber::time();
+    route.m_age         = age;
 
     gDebug(this, "R:RTABLE: ACCEPT route: dst=%08x, distance=%i", dst, distance);
   }
   else
   {
     gDebug(this, "R:RTABLE: REJECT route: dst=%08x, distance=%i", dst, distance);
+  }
+
+  if (route.m_age > age)
+  {
+    route.m_age = age;
   }
 }
 
@@ -317,21 +318,34 @@ Bool G3Network :: write(Address dst, GFrame& frame)
 
 Bool G3Network :: writeRoutingTable()
 {
-  GFrame frame(RoutingTable);
+  GFrame  frame(RoutingTable);
+  Time    time  = GFiber::time();
+  Time    time9 = time / 1000000ULL;
 
   frame.writeBack4(m_routeTable.size());        // 0-4: numEntries
   frame.writeBack4(m_links.at(0)->m_address);   // 4-8: address
 
+  for (auto it = m_routeTable.begin(); it != m_routeTable.end(); )
+  {
+    if ((time - it->m_age) / G_SEC(30))
+      it = m_routeTable.erase(it);
+    else
+      ++it;
+  }
+
   gSetContext(frame.context());
-  gDebug(this, "W:RTABLE: routing table");
-  gDebug(this, "W:RTABLE: numEntries = %i", m_routeTable.size());
+  gDebug(this, "W:RTABLE: writing routing table (num=%i)", m_routeTable.size());
+  gDebug(this, "W:RTABLE: | %8s | %8s | %8s | %8s |", "DST", "DISTANCE", "AGE", "DELTA*");
 
   for (auto it = m_routeTable.begin(); it != m_routeTable.end(); ++it)
   {
-    gDebug(this, "W:RTABLE: ** entry: to=%08x, dist=%08x", it.key(), it->m_distance);
+    U4 age = it->m_age / 1000000ULL;
+
+    gDebug(this, "W:RTABLE: | %08llx | %8i | %8i | %8i |",
+           it.key(), it->m_distance, age, time9 - age);
     frame.writeBack4(it.key());
     frame.writeBack4(it->m_distance);
-    frame.writeBack4(U4(it->m_age / 10000000ULL));
+    frame.writeBack4(age);
   }
 
   return broadcast(G2DataLink::RoutingTable, frame);

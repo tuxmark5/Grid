@@ -22,13 +22,14 @@ Vacuum GFiber :: GFiber(Function function, int stack):
   m_timer(0),
   m_function(std::move(function))
 {
+  stack *= 3;
   enqueue(s_fiber1);
   getcontext(&m_context);
   m_context.uc_link           = &s_main;
-  m_context.uc_stack.ss_sp    = malloc(stack * 2);
+  m_context.uc_stack.ss_sp    = malloc(stack);
   //memset((void*) m_context.uc_stack.ss_sp, 0, sizeof(stack * 20));
-  id = VALGRIND_STACK_REGISTER(m_context.uc_stack.ss_sp, m_context.uc_stack.ss_sp + stack * 2);
-  m_context.uc_stack.ss_size  = stack * 2;
+  //id = VALGRIND_STACK_REGISTER(m_context.uc_stack.ss_sp, m_context.uc_stack.ss_sp + stack * 2);
+  m_context.uc_stack.ss_size  = stack;
   makecontext(&m_context, (void (*)(void)) run, 1, this);
 }
 
@@ -40,12 +41,21 @@ Vacuum GFiber :: ~GFiber()
   {
     m_prev->m_next  = m_next;
     m_next->m_prev  = m_prev;
-    VALGRIND_STACK_DEREGISTER(id);
+   // VALGRIND_STACK_DEREGISTER(id);
     free(m_context.uc_stack.ss_sp);
   }
 
   if (s_fiber1 == this)
-    s_fiber1 = (m_next == this) ? 0 : m_next;
+  {
+    s_fiber1 = (m_prev == this) ? 0 : m_prev;
+  }
+
+  while (m_timer)
+  {
+    m_timer->m_fiber    = 0;
+    m_timer->m_active   = false;
+    m_timer             = m_timer->m_next;
+  }
 }
 
 /**********************************************************************************************/
@@ -125,6 +135,7 @@ Void GFiber :: exec()
     {
       s_fiber0 = s_fiber1;
       swapcontext(&s_main, &s_fiber1->m_context);
+      delete s_fiber0;
     }
 
     if (s_waiting)
@@ -132,6 +143,7 @@ Void GFiber :: exec()
       GFiber* active = s_waiting;
       s_waiting = s_waiting->m_next;
       active->enqueue(s_fiber1);
+      //printf("ENQ %lli\n", active->m_clock - s_time + 1);
       s_time   += active->m_clock - s_time + 1;
     }
   }
@@ -163,7 +175,6 @@ Void GFiber :: resume()
 Void GFiber :: run(GFiber* self)
 {
   self->m_function();
-  delete self;
 }
 
 /**********************************************************************************************/

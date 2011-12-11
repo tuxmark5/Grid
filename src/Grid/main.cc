@@ -48,6 +48,8 @@ Int main(Int argc, Char** argv)
   //m3 << new GPingPongClient(GEndPoint(0x11, 123), 5, 5);
 
   m1 << new GSMTPServer(123);
+  //m2 << new GTerminator();
+  m4 << new GTerminator();
   m3 << new GSMTPClient(GEndPoint(0x11, 123), 1000, 5);
 
   //m1 << new GWriterServer(123);

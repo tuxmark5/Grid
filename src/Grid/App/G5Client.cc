@@ -18,7 +18,7 @@ Void G5Client :: run()
 {
   for (Int i = 0; i < m_numConnections; i++)
   {
-    g_enableOutput = i >= 170;
+    //g_enableOutput = i >= 170;
     fprintf(stderr, "IT %i\n", i); fflush(stderr);
 
     gDebug(this, "CLIENT: connecting to %08x:%i, try=%i/%i",
@@ -35,7 +35,7 @@ Void G5Client :: run()
     {
       gDebug(this, "CLIENT: failed to connect to %08x:%i", m_server.first, m_server.second);
       sleep(2000);
-      gDebug(this, "MTTTTTTTTTT");
+      gDebug(this, "CLIENT: will try to connect again");
     }
   }
 
