@@ -25,7 +25,8 @@ class G2DataLink
     __ENUM Type
     {
       RoutingTable  = 0x11,
-      Transport     = 0x55
+      Transport     = 0x55,
+      Choke         = 0x66
     };
 
     sCONST int              Broadcast = 0;

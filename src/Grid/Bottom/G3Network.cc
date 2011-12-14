@@ -7,6 +7,9 @@
 #include <limits.h>
 
 /**********************************************************************************************/
+extern Int g_3_routePreemption;
+extern Int g_3_routeTimeout;
+/**********************************************************************************************/
 
 U4 g_masks[] =
 {
@@ -158,7 +161,8 @@ Bool G3Network :: read(G2DataLink* layer2, U8 src, U2 type, GFrame& frame)
       return readRoutingTable(link, src, frame);
 
     case G2DataLink::Transport:
-      return readTransport(link, frame);
+    case G2DataLink::Choke:
+      return readTransport(link, type, frame);
 
     default:
       gDebug(this, "R: WARNING: unknown frame type: %04x", type);
@@ -203,7 +207,7 @@ Bool G3Network :: readRoutingTable(G3Link* link, U8 src, GFrame& frame)
 
 /**********************************************************************************************/
 
-Bool G3Network :: readTransport(G3Link* link, GFrame& frame)
+Bool G3Network :: readTransport(G3Link* link, U2 type, GFrame& frame)
 {
   U4      l3_src  = frame.readFront4();    // 0-4
   U4      l3_dst  = frame.readFront4();    // 4-8
@@ -215,6 +219,8 @@ Bool G3Network :: readTransport(G3Link* link, GFrame& frame)
 
   if (l3_dst == link->m_address)
   {
+    if (type == G2DataLink::Choke)
+      return m_layer4->readChoke(l3_src);
     return m_layer4->read(l3_src, frame);
   }
 
@@ -266,9 +272,9 @@ Void G3Network :: updateRoute(G3Link* link, U8 hwSrc, Address dst, Int distance,
 
   G3Route& route = m_routeTable[dst];
 
-  bool r0 =   !route.m_link;                        // initialization
-  bool r1 = distance < route.m_distance;            // route with better distance)
-  bool r2 = I8(age - route.m_age) > I8(G_SEC(20));  // early re-route
+  bool r0 =   !route.m_link;                                          // initialization
+  bool r1 = distance < route.m_distance;                              // route with better distance)
+  bool r2 = I8(age - route.m_age) > I8(G_SEC(g_3_routePreemption));   // early re-route
 
   if (r0 || r1 || r2)
   {
@@ -292,7 +298,7 @@ Void G3Network :: updateRoute(G3Link* link, U8 hwSrc, Address dst, Int distance,
 
 /**********************************************************************************************/
 
-Bool G3Network :: write(Address dst, GFrame& frame)
+Bool G3Network :: write(Address dst, GFrame& frame, U2 type)
 {
   if (G3Route* route = routeFor(dst))
   {
@@ -304,7 +310,7 @@ Bool G3Network :: write(Address dst, GFrame& frame)
     gDebug(this, "W: dst  = %08x",  dst);
     gDebug(this, "W: hops = %i",    G3_HOP_LIMIT);
 
-    return route->write(G2DataLink::Transport, frame);
+    return route->write(type, frame);
   }
   else
   {
@@ -316,22 +322,31 @@ Bool G3Network :: write(Address dst, GFrame& frame)
 
 /**********************************************************************************************/
 
+Bool G3Network :: writeChoke(Address dst)
+{
+  GFrame  chokeFrame(Choke);
+
+  return write(dst, chokeFrame, G2DataLink::Choke);
+}
+
+/**********************************************************************************************/
+
 Bool G3Network :: writeRoutingTable()
 {
   GFrame  frame(RoutingTable);
   Time    time  = GFiber::time();
   Time    time9 = time / 1000000ULL;
 
-  frame.writeBack4(m_routeTable.size());        // 0-4: numEntries
-  frame.writeBack4(m_links.at(0)->m_address);   // 4-8: address
-
   for (auto it = m_routeTable.begin(); it != m_routeTable.end(); )
   {
-    if ((time - it->m_age) / G_SEC(30))
+    if ((time - it->m_age) / G_SEC(g_3_routeTimeout))
       it = m_routeTable.erase(it);
     else
       ++it;
   }
+
+  frame.writeBack4(m_routeTable.size());        // 0-4: numEntries
+  frame.writeBack4(m_links.at(0)->m_address);   // 4-8: address
 
   gSetContext(frame.context());
   gDebug(this, "W:RTABLE: writing routing table (num=%i)", m_routeTable.size());

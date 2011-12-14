@@ -65,8 +65,10 @@ class G4Transport
     ___MET GMachine*      machine() const { return m_machine; }
     ___MET Int            newSrcPort();
     ___MET Bool           read(Address src, GFrame& frame);
+    ___MET Bool           readChoke(Address src);
     ___MET Void           removeProcess(GProcess* process);
     ___MET Bool           write(G4TransportL* local, GFrame& frame);
+    ___MET Void           writeChoke();
 
   private:
     ___MET Void           removeLocal(G4TransportL* local);
@@ -122,14 +124,18 @@ class G4TransportL: public GObject
     ___FLD OFrameMap      m_output;
     ___FLD GFrame         m_output0;
 
-    ___FLD U4             m_srcSeq;
+    ___FLD U2             m_congestionWindow;
     ___FLD U2             m_receiveWindow0;
     ___FLD U2             m_receiveWindow;
+
+    ___FLD U4             m_srcSeq;
     ___FLD U4             m_dstSeq;
-    ___FLD U4             m_dstWindow;
+
     ___MET I1             m_numRefs;
     ___MET Time           m_timeout0;
     ___MET Time           m_timeout1;
+
+    ___MET Bool           m_expGrowth: 1;
 
   public:
     ___MET Vacuum         G4TransportL(G4Transport* global, GSocket* socket, Int srcPort, U4 dstAddr, Int dstPort);
@@ -156,6 +162,10 @@ class G4TransportL: public GObject
   private:
     ___MET Bool           acceptSequence(U4 seq);
     ___MET Void           ackOutput(U4 seq);
+    ___MET Void           choke();
+    ___MET Void           congestionDec();
+    ___MET Void           congestionInc();
+    __sMET const char*    flagName(U1 flag);
     ___MET Void           readFin(U4 seq);
     ___MET Void           readFrame(G4Header& header, GFrame& frame);
     ___MET Void           readFrameEstablished(G4Header& header, GFrame& frame);
@@ -173,7 +183,7 @@ class G4TransportL: public GObject
     ___MET Bool           waitForData();
     ___MET Bool           waitForRead();
     ___MET Bool           writeControl(U2 flags = ACK);
-    ___MET Bool           writeFrame(U2 flags = ACK, Int numRetries = 10);
+    ___MET Bool           writeFrame(U2 flags = ACK, Int numRetries = -1);
     ___MET Bool           writeFrameEx(GFrame frame, U4 seq);
 };
 

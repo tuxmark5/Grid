@@ -46,6 +46,10 @@ Void GPingPongClient :: run()
       gDebug(this, "PING_CLIENT: connection closed");
       delete socket;
     }
+    else
+    {
+      GFiber::sleep(5000);
+    }
   }
 
   gDebug(this, "PING_CLIENT: TERMINATING");

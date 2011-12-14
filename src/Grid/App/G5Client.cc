@@ -1,5 +1,7 @@
 #include <Grid/App/G5Client.hh>
 
+/**********************************************************************************************/
+Int g_5_numIteration = 0;
 /********************************************* TX *********************************************/
 /*                                          G5Client                                          */
 /**********************************************************************************************/
@@ -18,11 +20,12 @@ Void G5Client :: run()
 {
   for (Int i = 0; i < m_numConnections; i++)
   {
-    //g_enableOutput = i >= 170;
+    g_5_numIteration  = i;
+    //g_enableOutput    = i >= 44;
     fprintf(stderr, "IT %i\n", i); fflush(stderr);
 
     gDebug(this, "CLIENT: connecting to %08x:%i, try=%i/%i",
-      m_server.first, m_server.second, i + 1, m_numConnections);
+      m_server.first, m_server.second, i, m_numConnections);
 
     if ((m_socket = GSocket::connect(m_server.first, m_server.second)))
     {
@@ -40,6 +43,7 @@ Void G5Client :: run()
   }
 
   gDebug(this, "CLIENT: all iterations completed");
+  fflush(stdout);
 }
 
 /**********************************************************************************************/

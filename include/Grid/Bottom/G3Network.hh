@@ -67,9 +67,10 @@ class G3Network
     ___MET const LinkList&  links() const { return m_links; }
     ___MET Bool             read(G2DataLink* layer2, U8 src, U2 type, GFrame& frame);
     ___MET Bool             readRoutingTable(G3Link* link, U8 src, GFrame& frame);
-    ___MET Bool             readTransport(G3Link* link, GFrame& frame);
+    ___MET Bool             readTransport(G3Link* link, U2 type, GFrame& frame);
     ___MET G3Route*         routeFor(Address address);
-    ___MET Bool             write(Address dst, GFrame& frame);
+    ___MET Bool             write(Address dst, GFrame& frame, U2 type = G2DataLink::Transport);
+    ___MET Bool             writeChoke(Address dst);
     ___MET Bool             writeRoutingTable();
 
   private:

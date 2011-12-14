@@ -9,9 +9,10 @@
 #include <stdarg.h>
 
 /**********************************************************************************************/
+extern Int g_d_output;
+/**********************************************************************************************/
 Bool      g_enableOutput    = true;
 GContext  g_context         = { 0, Undefined };
-Bool      g_logTables       = false;
 Int       g_numMessages     = 0;
 /********************************************* TX *********************************************/
 /*                                           GDebug                                           */
@@ -110,16 +111,8 @@ void gDebug(G5App* self, const char* fmt, ...)
 void gOutput(GMachine* machine, int layer, const char* string)
 {
   G_GUARD(g_enableOutput, Vacuum);
-
-  /*switch (layer)
-  {
-    case 1: return;
-    case 2: return;
-    case 3: return;
-  }*/
-
-  if (g_context.type == RoutingTable)
-    return;
+  G_GUARD(g_context.type & g_d_output, Vacuum);
+  G_GUARD((1 << layer)   & g_d_output, Vacuum);
 
   int indent = 5 - layer;
   printf("%-10s|#%04x|", machine->name().constData(), U4(g_context.id & 0xFFFF));

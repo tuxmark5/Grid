@@ -7,10 +7,12 @@
 
 #define G_RETAIN(x) GRetainer<G4TransportL> __retainer__(this); Q_UNUSED(__retainer__)
 /**********************************************************************************************/
-int   g_4_congestionWindow  = 3;    // 3
-int   g_4_receiveWindow     = 10;   //
-int   g_4_retransmitRetries = 10;
-int   g_4_retransmitTimeout = 1000;
+extern Int  g_4_receiveWindow;
+extern Int  g_4_retransmitRetries;
+extern Int  g_4_retransmitTimeout;
+extern Int  g_4_softTimeout;
+extern Int  g_4_hardTimeout;
+extern Int  g_4_ackOfSyn2Dilation;
 /**********************************************************************************************/
 
 template <class List, class Lambda>
@@ -110,12 +112,12 @@ Bool G4Transport :: read(Address l3_src, GFrame& frame)
   header.flag             = frame.readFront1();  // 16-17
   GDescriptor   descriptor  = GDescriptor(header.localPort, l3_src, header.remotePort);
 
-  gDebug(this, "R: remotePort = %i", header.remotePort);
-  gDebug(this, "R: localPort  = %i", header.localPort);
-  gDebug(this, "R: seq        = %i", header.sequence);
-  gDebug(this, "R: ack        = %i", header.ack);
-  gDebug(this, "R: window     = %i", header.receiveWindow);
-  gDebug(this, "R: flag       = %x", header.flag);
+  gDebug(this, "R: remotePort = %i",    header.remotePort);
+  gDebug(this, "R: localPort  = %i",    header.localPort);
+  gDebug(this, "R: seq        = %i",    header.sequence);
+  gDebug(this, "R: ack        = %i",    header.ack);
+  gDebug(this, "R: window     = %i",    header.receiveWindow);
+  gDebug(this, "R: flag       = %x %s", header.flag, G4TransportL::flagName(header.flag));
 
   if (G4TransportL* connection = m_connections.value(descriptor))
   {
@@ -145,6 +147,22 @@ Bool G4Transport :: read(Address l3_src, GFrame& frame)
   }
 
   return false;
+}
+
+/**********************************************************************************************/
+
+Bool G4Transport :: readChoke(Address src)
+{
+  gDebug(this, "R: >>CHOKE<< packet received, drastically reducing congestion windows");
+
+  for (auto it = m_connections.begin(); it != m_connections.end(); ++it)
+  {
+    G4TransportL* connection = it.value();
+    if (connection->m_dstAddr == src)
+      connection->choke();
+  }
+
+  return true;
 }
 
 /**********************************************************************************************/
@@ -185,6 +203,22 @@ Bool G4Transport :: write(G4TransportL* local, GFrame& frame)
   return m_layer3->write(local->m_dstAddr, frame);
 }
 
+/**********************************************************************************************/
+
+Void G4Transport :: writeChoke()
+{
+  gDebug(this, "W: >>CONGESTION<< detected, broadcasting >>CHOKE<<");
+
+  for (auto it = m_connections.begin(); it != m_connections.end(); ++it)
+  {
+    G4TransportL* connection = it.value();
+
+    gDebug(this, "W: choking %x(:%i)", connection->m_dstAddr, connection->m_dstPort);
+    if (connection->m_state == G4TransportL::Established)
+      m_layer3->writeChoke(connection->m_dstAddr);
+  }
+}
+
 /********************************************* TX *********************************************/
 /*                                        G4TransportL                                        */
 /**********************************************************************************************/
@@ -193,12 +227,13 @@ Vacuum G4TransportL :: G4TransportL(G4Transport* global, GSocket* socket, Int sr
   m_global(global), m_parent(0),
   m_socket(socket), m_retryTimer(3000, global->m_machine->core()), m_state(Invalid),
   m_srcPort(srcPort), m_dstAddr(dstAddr), m_dstPort(dstPort),
-  m_output0(0),
-  m_srcSeq(0), m_receiveWindow(0), m_receiveWindow0(0),
-  m_dstSeq(0), m_dstWindow(0),
+  m_output0(Transport),
+  m_congestionWindow(1), m_receiveWindow0(0), m_receiveWindow(0),
+  m_srcSeq(0), m_dstSeq(0),
   m_numRefs(1),
   m_timeout0(ULONG_LONG_MAX),
-  m_timeout1(ULONG_LONG_MAX)
+  m_timeout1(ULONG_LONG_MAX),
+  m_expGrowth(true)
 {
   if (dstPort == -1)
     m_global->m_listeners.insert(srcPort, this);
@@ -272,6 +307,15 @@ Void G4TransportL :: ackOutput(U4 seq)
 
 /**********************************************************************************************/
 
+Void G4TransportL :: choke()
+{
+  gDebug(this, "R: >>CHOKE<< connection %x:%i", m_dstAddr, m_dstPort);
+  m_congestionWindow  = 1;
+  m_expGrowth         = false;
+}
+
+/**********************************************************************************************/
+
 Void G4TransportL :: close()
 {
   G_RETAIN(this);
@@ -284,6 +328,41 @@ Void G4TransportL :: close()
 
   while (m_state != Closed)
     m_monitor.wait();
+}
+
+/**********************************************************************************************/
+
+Void G4TransportL :: congestionDec()
+{
+  m_congestionWindow /= 2;
+  m_expGrowth         = false;
+
+  if (m_congestionWindow < 1)
+    m_congestionWindow = 1;
+}
+
+/**********************************************************************************************/
+
+Void G4TransportL :: congestionInc()
+{
+  U2    congestionWindow0 = m_congestionWindow;
+  Bool  limited           = false;
+
+  if (m_expGrowth)
+    m_congestionWindow *= 2;
+  else
+    m_congestionWindow += 1;
+
+  if (m_congestionWindow > 1000)
+  {
+    m_congestionWindow  = 1000;
+    limited             = true;
+  }
+
+  gDebug(this, "R: cgWindow++ = %i -> %i %s %s",
+    congestionWindow0, m_congestionWindow,
+    m_expGrowth  ? "[EXP]" : "[LIN]",
+    limited      ? "[LIM]" : "");
 }
 
 /**********************************************************************************************/
@@ -326,9 +405,23 @@ GFrame* G4TransportL :: firstFrame()
 
 /**********************************************************************************************/
 
+const char* G4TransportL :: flagName(U1 flag)
+{
+  static char buffer[64];
+
+  sprintf(buffer, "%s %s %s %s",
+    flag & ACK  ? "ACK"   : "",
+    flag & SYN  ? "SYN"   : "",
+    flag & FIN  ? "FIN"   : "",
+    flag & RACK ? "RACK"  : "");
+  return buffer;
+}
+
+/**********************************************************************************************/
+
 Void G4TransportL :: flush()
 {
-  while ((m_output.size() > g_4_congestionWindow) || (m_receiveWindow == 0))
+  while ((m_output.size() > m_congestionWindow) || (m_receiveWindow == 0))
     m_monitor.wait();
   m_receiveWindow--;
   writeFrame(ACK | RACK);
@@ -431,8 +524,8 @@ Void G4TransportL :: readFrame(G4Header& header, GFrame& frame)
   G_GUARD(m_state != Invalid,   Vacuum);
   G_RETAIN(this);
 
-  m_timeout0 = GFiber::time() + G_SEC(30);
-  m_timeout1 = m_timeout0     + G_SEC(3000);
+  m_timeout0 = GFiber::time() + G_SEC(g_4_softTimeout);
+  m_timeout1 = m_timeout0     + G_SEC(g_4_hardTimeout);
 
   gDebug(this, "R: state      = %s", stateName(m_state).constData());
 
@@ -440,7 +533,10 @@ Void G4TransportL :: readFrame(G4Header& header, GFrame& frame)
     setReceiveWindow(header.ack, header.receiveWindow);
 
   if (header.flag & ACK)
+  {
     ackOutput(header.ack);
+    congestionInc();
+  }
 
   switch (m_state)
   {
@@ -524,7 +620,8 @@ Void G4TransportL :: readFrameFinSent(G4Header& header, GFrame& frame)
 Void G4TransportL :: readFrameSynReceived(G4Header& header, GFrame& frame)
 {
   // accept
-  if (header.sequence == m_srcSeq + 1)
+  //if (header.sequence == m_srcSeq + 1)
+  if ((header.sequence > m_srcSeq) && (header.sequence < m_srcSeq + g_4_ackOfSyn2Dilation))
   {
     m_global->m_unclaimed.insert(m_srcPort, this);
     setState(Established);
@@ -569,7 +666,8 @@ Void G4TransportL :: release()
 
 Void G4TransportL :: retransmit()
 {
-  Time time = GFiber::time();
+  Time  time          = GFiber::time();
+  bool  retransmitted = false;
 
   gDebug(this, "FIRE TIMER %p", this);
 
@@ -592,9 +690,13 @@ Void G4TransportL :: retransmit()
       gDebug(this, "W: retransmitting frame: numRetries = %i", frame.numRetries);
       frame.numRetries -= 1;
       frame.time        = time;
+      retransmitted     = true;
       writeFrameEx(frame.frame, it.key());
     }
   }
+
+  if (retransmitted)
+    congestionDec();
 }
 
 /**********************************************************************************************/
@@ -621,7 +723,7 @@ Void G4TransportL :: setSocket(GSocket* socket)
 Void G4TransportL :: setReceiveWindow(U4 ack, U2 receiveWindow)
 {
   U2  window = qMax(0, int(ack + receiveWindow - m_dstSeq));
-  gDebug(this, "SRW %i %i %i -> %i", m_dstSeq, ack, receiveWindow, window);
+  //gDebug(this, "SRW %i %i %i -> %i", m_dstSeq, ack, receiveWindow, window);
   G_GUARD(m_receiveWindow != window, Vacuum);
 
   if (m_receiveWindow == 0)
@@ -662,7 +764,7 @@ Void G4TransportL :: timeoutCheck()
 {
   Time time = GFiber::time();
 
-  if (m_timeout0 < time)
+  if ((m_timeout0 < time) && (m_state == Established))
   {
     m_timeout0 = ULONG_LONG_MAX;
     gDebug(this, "soft timeout");
@@ -736,9 +838,12 @@ Bool G4TransportL :: writeControl(U2 flags)
 
 Bool G4TransportL :: writeFrame(U2 flags, Int numRetries)
 {
+  if (numRetries == -1)
+    numRetries = g_4_retransmitRetries;
+
   gSetContext(m_output0.context());
-  gDebug(this, "W: [window] = %i", m_receiveWindow);
-  gDebug(this, "W: flag     = %x", flags);
+  gDebug(this, "W: [window] = %i",    m_receiveWindow);
+  gDebug(this, "W: flag     = %x %s", flags, flagName(flags));
 
   m_output0.writeFront1(flags);       // 14-15 flag
 
@@ -748,7 +853,8 @@ Bool G4TransportL :: writeFrame(U2 flags, Int numRetries)
   }
 
   Bool result = writeFrameEx(m_output0, m_dstSeq);
-  m_output0 = 0;
+
+  m_output0 = GFrame(Transport);
 
   return result;
 }

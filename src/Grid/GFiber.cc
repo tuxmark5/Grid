@@ -5,10 +5,11 @@
 #include <valgrind/memcheck.h>
 
 /**********************************************************************************************/
-Time        GFiber :: s_time    = 0;
-GFiber*     GFiber :: s_fiber0  = 0;
-GFiber*     GFiber :: s_fiber1  = 0;
-GFiber*     GFiber :: s_waiting = 0;
+Int         GFiber :: s_numYields = 0;
+Time        GFiber :: s_time      = 0;
+GFiber*     GFiber :: s_fiber0    = 0;
+GFiber*     GFiber :: s_fiber1    = 0;
+GFiber*     GFiber :: s_waiting   = 0;
 ucontext_t  GFiber :: s_main;
 /********************************************* TX *********************************************/
 /*                                           GFiber                                           */
@@ -209,15 +210,15 @@ Time GFiber :: time()
 }
 
 /**********************************************************************************************/
-int ff = 0;
+
 Void GFiber :: yield()
 {
   Time      clock0  = GFiber::time();
   GTimer*&  timer   = s_fiber0->m_timer;
 
-  if (ff++ > 10000000)
+  if (s_numYields++ > 20000000)
   {
-    printf("WOO\n");
+    fprintf(stderr, "[[yield limit reached]]\n");
     exit(0);
   }
 
@@ -242,7 +243,7 @@ Void GFiber :: yield()
 
   if (!next)
   {
-    printf("[[no active threads; swapping to the main thread]]");
+    fprintf(stderr, "[[no active threads; swapping to the main thread]]");
     swapcontext(&s_fiber1->m_context, &s_main);
   }
 
@@ -255,7 +256,7 @@ Void GFiber :: yield()
     {
       if (t.contains(s))
       {
-        printf("EEEEEEER %p\n", s);
+        fprintf(stderr, "EEEEEEER %p\n", s);
         exit(0);
       }
       t.append(s);

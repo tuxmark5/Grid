@@ -13,7 +13,11 @@
 class GMachine
 {
   private:
+    __sFLD U4                       s_interfaceId;
+    __sFLD U4                       s_machineId;
+
     ___FLD QByteArray               m_name;
+    ___FLD U4                       m_id;
     ___FLD QHash<int, GProcess*>    m_processes;
     ___FLD bool                     m_destroying: 1;
 
@@ -28,12 +32,14 @@ class GMachine
     ___MET Vacuum                   GMachine(const GMachine& other);
     ___MET Vacuum                   ~GMachine();
     ___MET GFiber*                  core() const { return m_core; }
+    ___MET U4                       id() const { return m_id; }
     ___MET QList<G2DataLink*>       layer2() const;
     ___MET G4Transport*             layer4() const { return m_layer4; }
     ___MET QByteArray               name() const { return m_name; }
     __sMET Void                     printRoutingTables();
     ___MET Void                     removeProcess(GProcess* process);
     ___MET Void                     send(GFrame& frame);
+    ___MET GMachine&                operator &  (GMachine& other);
     ___MET GInterface               operator () (U8 mac, U4 address, U1 length);
     ___MET GMachine&                operator << (std::function<void()> process);
     ___MET GMachine&                operator << (G5App* process);

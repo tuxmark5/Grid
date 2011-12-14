@@ -13,8 +13,8 @@ TEMPLATE         = app
 
 ################################################################################################
 
-QMAKE_CXXFLAGS  += -DCOMPILE -std=gnu++0x -g -O0 -pg
-LIBS            += -g -O0 -pg
+QMAKE_CXXFLAGS  += -DCOMPILE -std=gnu++0x -g
+LIBS            += -g
 
 INCLUDEPATH     += include
 

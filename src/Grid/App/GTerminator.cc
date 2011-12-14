@@ -28,9 +28,7 @@ Void GTerminator :: run()
     layer1->setEnabled(false);
   }
 
-  gDebug(this, ">>RESURRECTING THIS MACHINE<<");
-  sleep(50000);
-  gDebug(this, ">>RESURRECTING THIS MACHINE2<<");
+  gDebug(this, ">>MACHINE TERMINATED<<");
 }
 
 /**********************************************************************************************/

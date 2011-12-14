@@ -5,15 +5,20 @@
 #include <Grid/Bottom/G4Transport.hh>
 #include <Grid/Bottom/GProcess.hh>
 #include <Grid/Top/GInterface.hh>
+#include <Grid/Top/GLink.hh>
 #include <Grid/Top/GMachine.hh>
 #include <Grid/Top/GSocket.hh>
 
+/**********************************************************************************************/
+U4 GMachine :: s_interfaceId  = 0;
+U4 GMachine :: s_machineId    = 0;
 /********************************************* TX *********************************************/
 /*                                          GMachine                                          */
 /**********************************************************************************************/
 
 Vacuum GMachine :: GMachine(const QByteArray& name):
   m_name(name),
+  m_id(s_machineId++),
   m_destroying(false)
 {
   m_core    = new GFiber(std::bind(&GMachine::run, this));
@@ -80,13 +85,34 @@ Void GMachine :: run()
 
 Void GMachine :: send(GFrame& frame)
 {
-  if (m_oqueue.size() > 30)
+  if (m_oqueue.size() == 30)
   {
-    printf("[[OUTPUT QUEUE TOO LARGE]]\n");
+    m_layer4->writeChoke();
+  }
+
+  if (m_oqueue.size() > 100)
+  {
+    fprintf(stderr, "[[OUTPUT QUEUE TOO LARGE]]\n");
     exit(0);
   }
-  m_oqueue.append(frame);
+
+  if (frame.context().type == Choke)
+    m_oqueue.prepend(frame);
+  else
+    m_oqueue.append(frame);
   m_omon.notify();
+}
+
+/**********************************************************************************************/
+
+GMachine& GMachine :: operator & (GMachine& other)
+{
+  GLink* link = new GLink(); // leak
+
+  *link << GInterface(this,   s_interfaceId + 0, id(),        1)
+        << GInterface(&other, s_interfaceId + 1, other.id(),  1);
+  s_interfaceId += 2;
+  return *this;
 }
 
 /**********************************************************************************************/

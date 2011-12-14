@@ -127,6 +127,7 @@ Void GSMTPServerHandler :: reply(const char* fmt, ...)
 }
 
 /**********************************************************************************************/
+extern Int g_5_numIteration;
 
 Void GSMTPServerHandler :: run()
 {
@@ -160,7 +161,7 @@ Void GSMTPServerHandler :: run()
         int id = m_server->queueMessage(m_message);
 
         m_message = new GSMTPMessage();
-        reply("250 Ok: queued as %i", id);
+        reply("250 Ok: queued as %i (iter=%i)", id, g_5_numIteration);
       }
       else
       {

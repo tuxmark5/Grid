@@ -14,18 +14,23 @@
 #include <QtCore/QCoreApplication>
 #include <stdio.h>
 
+/**********************************************************************************************/
+Int   g_3_routePreemption     = 45;     // secs
+Int   g_3_routeTimeout        = 90;     // secs
+/**********************************************************************************************/
+Int   g_4_receiveWindow       = 10;     // frames
+Int   g_4_retransmitRetries   = 100;    // tries
+Int   g_4_retransmitTimeout   = 1000;   // msecs
+Int   g_4_softTimeout         = 30;     // secs
+Int   g_4_hardTimeout         = 30000;  // secs
+Int   g_4_ackOfSyn2Dilation   = 10;     // frames; for the timer problem
+/**********************************************************************************************/
+Int   g_d_output
+  = Layer0 | Layer1 | Layer2 | Layer3 | Layer4 | Layer5
+  | Transport | Undefined | Choke;
 /********************************************* TX *********************************************/
 /*                                            main                                            */
 /**********************************************************************************************/
-
-
-/**********************************************************************************************/
-
-/*
-3: overflow
-4: threshold
-* INITIAL SETUP
-*/
 
 Int main(Int argc, Char** argv)
 {
@@ -33,27 +38,27 @@ Int main(Int argc, Char** argv)
   Q_UNUSED(argv);
 
   GCollector  collector;
-  GLink       l12, l23, l34, l14;
-  GMachine&   m1 = machine("[1] SR");
+  GMachine&   m0 = machine("[0] SR");
+  GMachine&   m1 = machine("[1]");
   GMachine&   m2 = machine("[2]");
   GMachine&   m3 = machine("[3] CL");
   GMachine&   m4 = machine("[4]");
+  GMachine&   m5 = machine("[5]");
 
-  l12 << m1(0x11A, 0x11, 16) << m2(0x22A, 0x22, 16);
-  l23 << m3(0x33A, 0x33, 16) << m2(0x22B, 0x22, 16);
-  l34 << m3(0x33B, 0x33, 16) << m4(0x44A, 0x44, 16);
-  l14 << m1(0x11B, 0x11, 16) << m4(0x44B, 0x44, 16);
+  m0 & m1; m1 & m2; m2 & m3;
+  m0 & m4; m4 & m5; m5 & m3;
 
-  //m1 << new GPingPongServer(123);
-  //m3 << new GPingPongClient(GEndPoint(0x11, 123), 5, 5);
+  //m0 & m1 & m3;
+  //m0 & m2 & m3;
 
-  m1 << new GSMTPServer(123);
-  //m2 << new GTerminator();
-  m4 << new GTerminator();
-  m3 << new GSMTPClient(GEndPoint(0x11, 123), 1000, 5);
+  //m0 << new GPingPongServer(123);
+  //m3 << new GPingPongClient(GEndPoint(0x00, 123), 20, 5);
 
-  //m1 << new GWriterServer(123);
-  //m3 << new GReaderClient(GEndPoint(0x11, 123), 1000, 5);
+  m0 << new GSMTPServer(123);
+  m3 << new GSMTPClient(GEndPoint(0x00, 123), 1000, 5);
+
+  //m0 << new GWriterServer(123);
+  //m3 << new GReaderClient(GEndPoint(0x00, 123), 1000, 5);
 
   GFiber::exec();
   printf("[[normal exit]]\n");

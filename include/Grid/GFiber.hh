@@ -20,6 +20,7 @@ class GFiber
     __TYPE std::function<void()>  Function;
 
   public:
+    __sFLD Int                  s_numYields;
     __sFLD Time                 s_time;
     __sFLD GFiber*              s_fiber0;
     __sFLD GFiber*              s_fiber1;

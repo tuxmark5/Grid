@@ -22,7 +22,7 @@ class GFrameData: public GSharedData<GFrameData>
     ___FLD GContext         m_context;
 
   public:
-    ___MET Vacuum           GFrameData(Int type = 0, G1Physical* layer1 = 0);
+    ___MET Vacuum           GFrameData(Int type = Undefined, G1Physical* layer1 = 0);
     ___MET Vacuum           GFrameData(const GFrameData& data);
     ___MET Vacuum           ~GFrameData();
 
@@ -63,7 +63,7 @@ class GFrame
     ___FLD DataPtr          d;
 
   public:
-    ___MET Vacuum           GFrame(Int type = 0, G1Physical* layer1 = 0);
+    ___MET Vacuum           GFrame(Int type = Undefined, G1Physical* layer1 = 0);
     ___MET Vacuum           GFrame(const GFrame& other);// = delete;
     //___MET Vacuum           GFrame(GFrame&& other);
     ___MET Vacuum           ~GFrame();

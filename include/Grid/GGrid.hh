@@ -112,9 +112,16 @@ struct GContext
 /**********************************************************************************************/
 enum GFrameType
 {
-  Undefined     = 0,
-  RoutingTable  = 1,
-  Transport     = 2
+  Layer0        = 0x0001,
+  Layer1        = 0x0002,
+  Layer2        = 0x0004,
+  Layer3        = 0x0008,
+  Layer4        = 0x0010,
+  Layer5        = 0x0020,
+  Undefined     = 0x0100,
+  RoutingTable  = 0x0200,
+  Transport     = 0x0400,
+  Choke         = 0x0800
 };
 /**********************************************************************************************/
 class GObject
